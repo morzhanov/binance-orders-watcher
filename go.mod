@@ -3,6 +3,8 @@ module github.com/morzhanov/binance-orders-watcher
 go 1.17
 
 require (
+	github.com/form3tech-oss/jwt-go v3.2.5+incompatible // indirect
+	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/mailjet/mailjet-apiv3-go v0.0.0-20201009050126-c24bc15a9394 // indirect
 	github.com/mattn/go-sqlite3 v1.14.11 // indirect

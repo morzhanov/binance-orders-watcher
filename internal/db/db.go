@@ -8,9 +8,35 @@ import (
 	_ "github.com/mattn/go-sqlite3" // Import go-sqlite3 library
 )
 
+type Client interface {
+	GetOrders() []Order
+	GetPrices() []Price
+}
+
+type client struct {
+
+}
+
+type Order struct {}
+type Price struct {}
+
+func NewClient() Client {
+	return &client{}
+}
+
+func GetOrders() []Order{
+
+}
+
+func GetPrices() []Price{
+
+}
+
 // TODO: 	1. add db client
 //			2. add methods to persist and load alerts
 
+//	TODO:	check alerts in database, if alerts are not configured configure them
+//				a. guess this step should be performed on the background and alerts should be sent to email
 func main() {
 	os.Remove("sqlite-database.db") // I delete the file to avoid duplicated records.
 	// SQLite is a file based database.
