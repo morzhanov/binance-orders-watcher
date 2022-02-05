@@ -17,6 +17,7 @@
                 <h3>Orders</h3>
                 <table>
                     <tr>
+                        <th>Order ID</th>
                         <th>Order Symbol</th>
                         <th>Order Type</th>
                         <th>Order Status</th>
@@ -26,10 +27,11 @@
                         <th>Order Executed Qty</th>
                         <th>Symbol Market Price</th>
                         <th>Order/Market Price Spread</th>
+                        <th>Actions</th>
                     </tr>
                     {{ range .Orders}}
                     <tr>
-                        <td>{{ .Devicetype }}</td>
+                        <td>{{ .OrderID }}</td>
                         <th>{{ .Type }}</th>
                         <th>{{ .Status }}</th>
                         <th>{{ .Price }}</th>
@@ -38,6 +40,7 @@
                         <th>{{ .ExecutedQty }}</th>
                         <th>{{ .MarketPrice }}</th>
                         <th>{{ .OrderMarketPriceSpread }}</th>
+                        <th><button onclick="openAlertModal()">Add Alert</button></th>
                     </tr>
                     {{ end}}
                 </table>
@@ -57,8 +60,58 @@
                     {{ end}}
                 </table>
             </div>
+            <div>
+                <h3>Alerts</h3>
+                <table>
+                    <tr>
+                        <th>ID</th>
+                        <th>Symbol</th>
+                        <th>Price</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Text</th>
+                        <th>DirectionDown</th>
+                    </tr>
+                    {{ range .Alerts}}
+                    <tr>
+                        <td>{{ .ID }}</td>
+                        <th>{{ .Symbol }}</th>
+                        <th>{{ .Price }}</th>
+                        <th>{{ .Name }}</th>
+                        <th>{{ .Email }}</th>
+                        <th>{{ .Text }}</th>
+                        <th>{{ .DirectionDown }}</th>
+                    </tr>
+                    {{ end}}
+                </table>
+            </div>
         </main>
     </body>
+
+    <div id="modal" hidden>
+        <form id="add-alert-form" action="javascript:sendAlert()">
+            <label for="symbol">Symbol</label>
+            <input type="text" name="symbol" id="symbol"/>
+
+            <label for="price">Price</label>
+            <input type="number" name="price" id="price"/>
+
+            <label for="name">Name</label>
+            <input type="text" name="name" id="name"/>
+
+            <label for="email">Email</label>
+            <input type="text" name="email" id="email"/>
+
+            <label for="text">Text</label>
+            <input type="text" name="text" id="text"/>
+
+            <label for="directionDown">DirectionDown</label>
+            <input type="checkbox" name="directionDown" id="directionDown"/>
+
+            <button type="submit"></button>
+            <button onclick="closeAlertModal()"></button>
+        </form>
+    </div>
 </html>
 
 <script>
@@ -69,5 +122,31 @@
                 window.location.reload()
             })
             .catch(err => console.log(err))
+    }
+
+    function openAlertModal() {
+        document.getElementById("modal").hidden = false
+    }
+
+    function closeAlertModal() {
+        document.getElementById("modal").hidden = true
+    }
+
+    function sendAlert(e) {
+        e.preventDefault();
+        const data = new FormData(e.target);
+        const values = Object.fromEntries(data.entries());
+
+        fetch('{{ .AppURI }}/alert', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: values
+        })
+        .then(res => console.log(res.data))
+        .catch(err => console.log(err))
+        closeAlertModal()
     }
 </script>

@@ -13,16 +13,18 @@ var instance Client
 
 type Client interface {
 	SetOrders(orders []*Order) error
-	GetOrders() []*Order
+	GetOrders() ([]*Order, error)
 	SetPrices(prices []*Price) error
-	GetPrices() []*Price
+	GetPrices() ([]*Price, error)
+	AddAlert(alert *Alert) error
+	DeleteAlert(alert *Alert) error
+	GetAlerts() ([]*Alert, error)
 }
 
 type client struct {
 	db *sql.DB
 }
 
-// TODO: we should store limits and alerts in the database
 type Order struct {
 	Symbol                 string `json:"symbol"`
 	OrderId                int    `json:"orderId"`
@@ -48,6 +50,16 @@ type Order struct {
 type Price struct {
 	Symbol string `json:"symbol"`
 	Price  int    `json:"price"`
+}
+
+type Alert struct {
+	ID            string `json:"id"`
+	Symbol        string `json:"symbol"`
+	Price         int    `json:"price"`
+	Name          string `json:"name"`
+	Email         string `json:"email"`
+	Text          string `json:"text"`
+	DirectionDown bool   `json:"directionDown"`
 }
 
 func NewClient() (Client, error) {
@@ -154,6 +166,41 @@ func (c *client) GetPrices() ([]*Price, error) {
 		orders = append(orders, order)
 	}
 	return orders, nil
+}
+
+func (c *client) AddAlert(alert *Alert) error {
+	log.Println("inserting alert into db...")
+	insertSQL := fmt.Sprintf(`
+			INSERT INTO alerts ('id' ,'symbol', 'price', 'name', 'email', 'text', 'directionDown')
+			VALUES('%s', '%s', '%d', '%s', '%s', '%s', '%t');
+	`, alert.ID, alert.Symbol, alert.Price, alert.Name, alert.Email, alert.Text, alert.DirectionDown)
+
+	statement, err := c.db.Prepare(insertSQL)
+	if err != nil {
+		return err
+	}
+	_, err = statement.Exec()
+	return err
+}
+
+func (c *client) GetAlerts() ([]*Alert, error) {
+	log.Println("getting alert records from db...")
+	row, err := c.db.Query("SELECT * FROM alerts")
+	if err != nil {
+		return nil, err
+	}
+	defer row.Close()
+
+	alerts := make([]*Alert, 0)
+	for row.Next() {
+		alert := &Alert{}
+		err = row.Scan(&alert.ID, &alert.Symbol, &alert.Price, &alert.Name, &alert.Email, &alert.Text, &alert.DirectionDown)
+		if err != nil {
+			return nil, err
+		}
+		alerts = append(alerts, alert)
+	}
+	return alerts, nil
 }
 
 func (c *client) createTables() error {

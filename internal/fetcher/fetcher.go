@@ -8,7 +8,7 @@ import (
 )
 
 type Fetcher interface {
-	Fetch() error
+	Fetch() (orders []*db.Order, prices []*db.Price, err error)
 }
 
 type fetcherImp struct {
@@ -20,28 +20,28 @@ func New(binClient binance.Client, dbClient db.Client) Fetcher {
 	return &fetcherImp{binClient: binClient, db: dbClient}
 }
 
-func (f *fetcherImp) Fetch() error {
+func (f *fetcherImp) Fetch() ([]*db.Order, []*db.Price, error) {
 	binanceOrders, err := f.binClient.GetOrders()
 	if err != nil {
 		log.Println("failed to get binanceOrders from binance: ", err)
-		return err
+		return nil, nil, err
 	}
 	prices, err := f.binClient.GetPrices()
 	if err != nil {
 		log.Println("failed to get prices from binance: ", err)
-		return err
+		return nil, nil, err
 	}
 
 	orders := f.binanceOrdersToDBOrders(binanceOrders, prices)
 	if err = f.db.SetOrders(orders); err != nil {
 		log.Println("failed to set binanceOrders from binance to db: ", err)
-		return err
+		return nil, nil, err
 	}
 	if err = f.db.SetPrices(prices); err != nil {
 		log.Println("failed to set prices from binance to db: ", err)
-		return err
+		return nil, nil, err
 	}
-	return nil
+	return orders, prices, nil
 }
 
 func (f *fetcherImp) binanceOrdersToDBOrders(binOrders []*binance.BinanceOrder, prices []*db.Price) []*db.Order {

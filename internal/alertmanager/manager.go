@@ -5,28 +5,30 @@ import (
 )
 
 type Manager interface {
-	SendAlert(from, fromName, to, toName, text string) error
+	SendAlert(toEmail, toName, text string) error
 }
 
 type manager struct {
-	mailjetClient mailjet.Client
+	mailjetClient *mailjet.Client
+	senderEmail   string
+	senderName    string
 }
 
-func New(mailjetApiKey, mailjetApiSecret string) Manager {
-	mailjet.NewMailjetClient(mailjetApiKey, mailjetApiSecret)
-	return &manager{}
+func New(mailjetApiKey, mailjetApiSecret, senderName, senderEmail string) Manager {
+	client := mailjet.NewMailjetClient(mailjetApiKey, mailjetApiSecret)
+	return &manager{mailjetClient: client, senderName: senderName, senderEmail: senderEmail}
 }
 
-func (m *manager) SendAlert(from, fromName, to, toName, text string) error {
+func (m *manager) SendAlert(toEmail, toName, text string) error {
 	messagesInfo := []mailjet.InfoMessagesV31{
 		{
 			From: &mailjet.RecipientV31{
-				Email: from,
-				Name:  fromName,
+				Email: m.senderEmail,
+				Name:  m.senderName,
 			},
 			To: &mailjet.RecipientsV31{
 				mailjet.RecipientV31{
-					Email: to,
+					Email: toEmail,
 					Name:  toName,
 				},
 			},
