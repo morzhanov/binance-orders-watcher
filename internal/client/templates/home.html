@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>Binance Orders Watcher</title>
+        <style>
+            main {
+                display: flex;
+            }
+        </style>
+    </head>
+
+    <body>
+        <h1>Binance Orders Watcher</h1>
+        <button onclick="refreshData()">Refresh Data</button>
+        <main>
+            <div>
+                <h3>Orders</h3>
+                <table>
+                    <tr>
+                        <th>Order Symbol</th>
+                        <th>Order Type</th>
+                        <th>Order Status</th>
+                        <th>Order Price</th>
+                        <th>Order Stop Price</th>
+                        <th>Order Original Qty</th>
+                        <th>Order Executed Qty</th>
+                        <th>Symbol Market Price</th>
+                        <th>Order/Market Price Spread</th>
+                    </tr>
+                    {{ range .Orders}}
+                    <tr>
+                        <td>{{ .Devicetype }}</td>
+                        <th>{{ .Type }}</th>
+                        <th>{{ .Status }}</th>
+                        <th>{{ .Price }}</th>
+                        <th>{{ .StopPrice }}</th>
+                        <th>{{ .OrigQty }}</th>
+                        <th>{{ .ExecutedQty }}</th>
+                        <th>{{ .MarketPrice }}</th>
+                        <th>{{ .OrderMarketPriceSpread }}</th>
+                    </tr>
+                    {{ end}}
+                </table>
+            </div>
+            <div>
+                <h3>Market Prices</h3>
+                <table>
+                    <tr>
+                        <th>Symbol</th>
+                        <th>Price</th>
+                    </tr>
+                    {{ range .Prices}}
+                    <tr>
+                        <td>{{ .Symbol }}</td>
+                        <th>{{ .Price }}</th>
+                    </tr>
+                    {{ end}}
+                </table>
+            </div>
+        </main>
+    </body>
+</html>
+
+<script>
+    function refreshData() {
+        fetch("{{ .AppURI }}/refresh")
+            .then(response => {
+                console.log(response.data)
+                window.location.reload()
+            })
+            .catch(err => console.log(err))
+    }
+</script>

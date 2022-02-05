@@ -1,4 +1,4 @@
-package cron
+package checker
 
 import (
 	"log"
@@ -7,15 +7,13 @@ import (
 	"github.com/morzhanov/binance-orders-watcher/internal/fetcher"
 )
 
-const (
-	Interval = time.Minute * 30
-)
+// TODO: checked should get alerts from db and send alert if alert limit reached
 
-type Cron interface {
+type Checker interface {
 	Run() error
 }
 
-type cronImp struct {
+type checkerImpl struct {
 	fetcher fetcher.Fetcher
 }
 

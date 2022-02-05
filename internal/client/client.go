@@ -3,16 +3,17 @@ package client
 import (
 	"crypto/subtle"
 	"errors"
+	"html/template"
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/morzhanov/binance-orders-watcher/internal/db"
 
 	"github.com/form3tech-oss/jwt-go"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/morzhanov/binance-orders-watcher/internal/alertmanager"
+	"github.com/morzhanov/binance-orders-watcher/internal/db"
+	"github.com/morzhanov/binance-orders-watcher/internal/fetcher"
 )
 
 const (
@@ -27,10 +28,12 @@ type Client interface {
 
 type client struct {
 	r            *mux.Router
+	appUri       string
 	authUsername string
 	authPassword string
 	authSecret   string
 	db           db.Client
+	fetcher      fetcher.Fetcher
 	alertManager alertmanager.Manager
 }
 
@@ -40,6 +43,12 @@ type JWTPayload struct {
 	ExpiredAt time.Time `json:"expired_at"`
 }
 
+type HomePageTemplateData struct {
+	AppURI string
+	Orders []*db.Order
+	Prices []*db.Price
+}
+
 func (payload *JWTPayload) Valid() error {
 	if time.Now().After(payload.ExpiredAt) {
 		return errors.New("token is expired")
@@ -47,19 +56,22 @@ func (payload *JWTPayload) Valid() error {
 	return nil
 }
 
-func New(authUsername, authPassword, authSecret string, dbClient db.Client, alertManager alertmanager.Manager) Client {
+func New(authUsername, authPassword, authSecret, appUri string, dbClient db.Client, fetcherClient fetcher.Fetcher, alertManager alertmanager.Manager) Client {
 	c := &client{
+		appUri:       appUri,
 		authUsername: authUsername,
 		authPassword: authPassword,
 		authSecret:   authSecret,
 		db:           dbClient,
+		fetcher:      fetcherClient,
 		alertManager: alertManager,
 	}
 
+	// TODO: we should add an endpoint to configure limit when alert should be sent
 	r := mux.NewRouter()
 	r.Use(c.authMiddleware)
 	r.HandleFunc("/", c.homeHandler)
-	http.Handle("/", r)
+	r.HandleFunc("/refresh", c.refreshDataHandler)
 	c.r = r
 
 	return c
@@ -69,11 +81,36 @@ func (c *client) Run(port string) error {
 	return http.ListenAndServe(":"+port, c.r)
 }
 
-func (c *client) homeHandler(w http.ResponseWriter, r *http.Request) {
+func (c *client) homeHandler(w http.ResponseWriter, _ *http.Request) {
+	tmpl, err := template.ParseFiles("./templates/home.html")
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
 	orders := c.db.GetOrders()
 	prices := c.db.GetPrices()
+	homePageData := &HomePageTemplateData{
+		AppURI: c.appUri,
+		Orders: orders,
+		Prices: prices,
+	}
+	if err = tmpl.Execute(w, homePageData); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+	}
+}
 
-	// TODO: create template and render orders/prices, alerts and gaps
+func (c *client) refreshDataHandler(w http.ResponseWriter, _ *http.Request) {
+	if err := c.fetcher.Fetch(); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Data successfully loaded from Binance, the page could be reloaded."))
+	return
 }
 
 func (c *client) authMiddleware(h http.Handler) http.Handler {

@@ -2,127 +2,190 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 
 	_ "github.com/mattn/go-sqlite3" // Import go-sqlite3 library
 )
 
+var instance Client
+
 type Client interface {
-	SetOrders(orders []Order) error
-	GetOrders() []Order
-	SetPrices(prices []Price) error
-	GetPrices() []Price
+	SetOrders(orders []*Order) error
+	GetOrders() []*Order
+	SetPrices(prices []*Price) error
+	GetPrices() []*Price
 }
 
 type client struct {
-
+	db *sql.DB
 }
 
-type Order struct {}
-type Price struct {}
-
-func NewClient() Client {
-	return &client{}
+// TODO: we should store limits and alerts in the database
+type Order struct {
+	Symbol                 string `json:"symbol"`
+	OrderId                int    `json:"orderId"`
+	OrderListId            int    `json:"orderListId"`
+	ClientOrderId          string `json:"clientOrderId"`
+	Price                  int    `json:"price"`
+	OrigQty                int    `json:"origQty"`
+	ExecutedQty            int    `json:"executedQty"`
+	CummulativeQuoteQty    int    `json:"cummulativeQuoteQty"`
+	Status                 string `json:"status"`
+	TimeInForce            string `json:"timeInForce"`
+	Type                   string `json:"type"`
+	Side                   string `json:"side"`
+	StopPrice              int    `json:"stopPrice"`
+	IcebergQty             int    `json:"icebergQty"`
+	Time                   string `json:"time"`
+	UpdateTime             string `json:"updateTime"`
+	IsWorking              bool   `json:"isWorking"`
+	MarketPrice            int    `json:"marketPrice"`
+	OrderMarketPriceSpread int    `json:"orderMarketPriceSpread"`
 }
 
-func (c *client) SetOrders(orders []Order) error {
-
+type Price struct {
+	Symbol string `json:"symbol"`
+	Price  int    `json:"price"`
 }
 
-func (c *client)GetOrders() []Order{
+func NewClient() (Client, error) {
+	if instance != nil {
+		return instance, nil
+	}
 
-}
-
-func(c *client) SetPrices(prices []Price) error {
-
-}
-
-func(c *client) GetPrices() []Price{
-
-}
-
-// TODO: 	1. add db client
-//			2. add methods to persist and load alerts
-
-//	TODO:	check alerts in database, if alerts are not configured configure them
-//				a. guess this step should be performed on the background and alerts should be sent to email
-func main() {
-	os.Remove("sqlite-database.db") // I delete the file to avoid duplicated records.
-	// SQLite is a file based database.
-
-	log.Println("Creating sqlite-database.db...")
+	if err := os.Remove("sqlite-database.db"); err != nil {
+		return nil, err
+	}
+	log.Println("creating sqlite-database.db...")
 	file, err := os.Create("sqlite-database.db") // Create SQLite file
 	if err != nil {
-		log.Fatal(err.Error())
+		return nil, err
 	}
-	file.Close()
+	if err = file.Close(); err != nil {
+		return nil, err
+	}
 	log.Println("sqlite-database.db created")
+	sqlDB, _ := sql.Open("sqlite3", "./sqlite-database.db")
 
-	sqliteDatabase, _ := sql.Open
-	("sqlite3", "./sqlite-database.db") // Open the created SQLite File
-	defer sqliteDatabase.Close() // Defer Closing the database
-	createTable(sqliteDatabase) // Create Database Tables
-
-	// INSERT RECORDS
-	insertStudent(sqliteDatabase, "0001", "Liana Kim", "Bachelor")
-	insertStudent(sqliteDatabase, "0002", "Glen Rangel", "Bachelor")
-	insertStudent(sqliteDatabase, "0003", "Martin Martins", "Master")
-	insertStudent(sqliteDatabase, "0004", "Alayna Armitage", "PHD")
-	insertStudent(sqliteDatabase, "0005", "Marni Benson", "Bachelor")
-	insertStudent(sqliteDatabase, "0006", "Derrick Griffiths", "Master")
-	insertStudent(sqliteDatabase, "0007", "Leigh Daly", "Bachelor")
-	insertStudent(sqliteDatabase, "0008", "Marni Benson", "PHD")
-	insertStudent(sqliteDatabase, "0009", "Klay Correa", "Bachelor")
-
-	// DISPLAY INSERTED RECORDS
-	displayStudents(sqliteDatabase)
+	c := &client{db: sqlDB}
+	if err = c.createTables(); err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
-func createTable(db *sql.DB) {
-	createStudentTableSQL := `CREATE TABLE student (
-		"idStudent" integer NOT NULL PRIMARY KEY AUTOINCREMENT,		
+func (c *client) SetOrders(orders []*Order) error {
+	log.Println("inserting order records into db...")
+	insertSQL := `BEGIN TRANSACTION;`
+
+	for _, o := range orders {
+		insertSQL += fmt.Sprintf(`
+			INSERT INTO orders ('symbol', 'orderId', 'orderListId', 'clientOrderId', 'price', 'origQty', 'executedQty', 'cummulativeQuoteQty', 'status', 'timeInForce', 'type', 'side', 'stopPrice', 'icebergQty', 'time', 'updateTime', 'isWorking', 'marketPrice', 'orderMarketPriceSpread')
+			VALUES('%s', '%d', '%d', '%s', '%d', '%d', '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%t', '%d', '%d');
+		`, o.Symbol, o.OrderId, o.OrderListId, o.ClientOrderId, o.Price, o.OrigQty, o.ExecutedQty, o.CummulativeQuoteQty, o.Status, o.TimeInForce, o.Type, o.Side, o.StopPrice, o.IcebergQty, o.Time, o.UpdateTime, o.IsWorking, o.MarketPrice, o.OrderMarketPriceSpread)
+	}
+	insertSQL += `COMMIT;`
+
+	statement, err := c.db.Prepare(insertSQL)
+	if err != nil {
+		return err
+	}
+	_, err = statement.Exec()
+	return err
+}
+
+func (c *client) GetOrders() ([]*Order, error) {
+	log.Println("getting order records from db...")
+	row, err := c.db.Query("SELECT * FROM orders")
+	if err != nil {
+		return nil, err
+	}
+	defer row.Close()
+
+	orders := make([]*Order, 0)
+	for row.Next() {
+		order := &Order{}
+		err = row.Scan(&order.Symbol, &order.OrderId, &order.OrderListId, &order.ClientOrderId, &order.Price, &order.OrigQty, &order.ExecutedQty, &order.CummulativeQuoteQty, &order.Status, &order.TimeInForce, &order.Type, &order.Side, &order.StopPrice, &order.IcebergQty, &order.Time, &order.UpdateTime, &order.IsWorking, &order.MarketPrice, &order.OrderMarketPriceSpread)
+		if err != nil {
+			return nil, err
+		}
+		orders = append(orders, order)
+	}
+	return orders, nil
+}
+
+func (c *client) SetPrices(orders []*Price) error {
+	log.Println("inserting price records into db...")
+	insertSQL := `BEGIN TRANSACTION;`
+
+	for _, o := range orders {
+		insertSQL += fmt.Sprintf(`
+			INSERT INTO prices ('symbol', 'price')
+			VALUES('%s', '%d');
+		`, o.Symbol, o.Price)
+	}
+	insertSQL += `COMMIT;`
+
+	statement, err := c.db.Prepare(insertSQL)
+	if err != nil {
+		return err
+	}
+	_, err = statement.Exec()
+	return err
+}
+
+func (c *client) GetPrices() ([]*Price, error) {
+	log.Println("getting price records from db...")
+	row, err := c.db.Query("SELECT * FROM prices")
+	if err != nil {
+		return nil, err
+	}
+	defer row.Close()
+
+	orders := make([]*Price, 0)
+	for row.Next() {
+		order := &Price{}
+		err = row.Scan(&order.Symbol, &order.Price)
+		if err != nil {
+			return nil, err
+		}
+		orders = append(orders, order)
+	}
+	return orders, nil
+}
+
+func (c *client) createTables() error {
+	ordersTableSQL := `CREATE TABLE orders (		
 		"code" TEXT,
 		"name" TEXT,
 		"program" TEXT		
-	  );` // SQL Statement for Create Table
+	  );`
 
-	log.Println("Create student table...")
-	statement, err := db.Prepare(createStudentTableSQL) // Prepare SQL Statement
+	log.Println("create orders table...")
+	statement, err := c.db.Prepare(ordersTableSQL)
 	if err != nil {
-		log.Fatal(err.Error())
+		return err
 	}
-	statement.Exec() // Execute SQL Statements
-	log.Println("student table created")
-}
+	if _, err = statement.Exec(); err != nil {
+		return err
+	}
+	log.Println("orders table created")
 
-// We are passing db reference connection from main to our method with other parameters
-func insertStudent(db *sql.DB, code string, name string, program string) {
-	log.Println("Inserting student record ...")
-	insertStudentSQL := `INSERT INTO student(code, name, program) VALUES (?, ?, ?)`
-	statement, err := db.Prepare(insertStudentSQL) // Prepare statement.
-	// This is good to avoid SQL injections
-	if err != nil {
-		log.Fatalln(err.Error())
-	}
-	_, err = statement.Exec(code, name, program)
-	if err != nil {
-		log.Fatalln(err.Error())
-	}
-}
+	pricesTableSQL := `CREATE TABLE prices (		
+		"price" INTEGER,
+		"symbol" TEXT		
+	  );`
 
-func displayStudents(db *sql.DB) {
-	row, err := db.Query("SELECT * FROM student ORDER BY name")
+	log.Println("create prices table...")
+	statement, err = c.db.Prepare(pricesTableSQL)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	defer row.Close()
-	for row.Next() { // Iterate and fetch the records from result cursor
-		var id int
-		var code string
-		var name string
-		var program string
-		row.Scan(&id, &code, &name, &program)
-		log.Println("Student: ", code, " ", name, " ", program)
+	if _, err = statement.Exec(); err != nil {
+		return err
 	}
+	log.Println("prices table created")
+	return nil
 }
