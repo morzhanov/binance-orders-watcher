@@ -9,7 +9,9 @@ import (
 )
 
 type Client interface {
+	SetOrders(orders []Order) error
 	GetOrders() []Order
+	SetPrices(prices []Price) error
 	GetPrices() []Price
 }
 
@@ -24,11 +26,19 @@ func NewClient() Client {
 	return &client{}
 }
 
-func GetOrders() []Order{
+func (c *client) SetOrders(orders []Order) error {
 
 }
 
-func GetPrices() []Price{
+func (c *client)GetOrders() []Order{
+
+}
+
+func(c *client) SetPrices(prices []Price) error {
+
+}
+
+func(c *client) GetPrices() []Price{
 
 }
 

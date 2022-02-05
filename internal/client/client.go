@@ -47,12 +47,12 @@ func (payload *JWTPayload) Valid() error {
 	return nil
 }
 
-func New(authUsername, authPassword, authSecret string, db db.Client, alertManager alertmanager.Manager) Client {
+func New(authUsername, authPassword, authSecret string, dbClient db.Client, alertManager alertmanager.Manager) Client {
 	c := &client{
 		authUsername: authUsername,
 		authPassword: authPassword,
 		authSecret:   authSecret,
-		db:           db,
+		db:           dbClient,
 		alertManager: alertManager,
 	}
 

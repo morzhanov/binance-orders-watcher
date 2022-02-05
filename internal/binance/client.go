@@ -3,11 +3,13 @@ package binance
 import (
 	"fmt"
 	"net/http"
+
+	"github.com/morzhanov/binance-orders-watcher/internal/db"
 )
 
 type Client interface {
-	GetOrders()
-	GetPrices()
+	GetOrders() ([]db.Order, error)
+	GetPrices() ([]db.Price, error)
 }
 
 // TODO: 	1. find golang binance library or use http
