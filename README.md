@@ -1,1 +1,1 @@
-# bin-order-limit-watcher
+# Binance orders watcher
