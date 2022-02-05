@@ -17,3 +17,5 @@
 .env
 .idea
 .DS_Store
+watcher
+sqlite-database.db

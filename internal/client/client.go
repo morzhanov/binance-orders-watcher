@@ -6,6 +6,7 @@ import (
 	"errors"
 	"html/template"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -78,11 +79,12 @@ func New(authUsername, authPassword, authSecret, appUri string, dbClient db.Clie
 }
 
 func (c *client) Run(port string) error {
+	log.Printf("starting client application on %s:%s", c.appUri, port)
 	return http.ListenAndServe(":"+port, c.r)
 }
 
 func (c *client) homeHandler(w http.ResponseWriter, _ *http.Request) {
-	tmpl, err := template.ParseFiles("./templates/home.html")
+	tmpl, err := template.ParseFiles("./internal/client/templates/home.html")
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(err.Error()))
@@ -170,8 +172,10 @@ func (c *client) authMiddleware(h http.Handler) http.Handler {
 			h.ServeHTTP(w, r)
 			return
 		}
+		log.Println("access token is not found in cookies, starting base auth flow...")
 		token := c.basicAuth(w, r)
 		if token == "" {
+			w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
 			w.WriteHeader(401)
 			w.Write([]byte("Unauthorised.\n"))
 			return
@@ -182,6 +186,7 @@ func (c *client) authMiddleware(h http.Handler) http.Handler {
 			Expires: time.Now().Add(time.Second * TokenExpirationDurationInSec),
 		}
 		http.SetCookie(w, authCookie)
+		h.ServeHTTP(w, r)
 	})
 }
 

@@ -2,6 +2,7 @@ package fetcher
 
 import (
 	"log"
+	"strconv"
 
 	"github.com/morzhanov/binance-orders-watcher/internal/binance"
 	"github.com/morzhanov/binance-orders-watcher/internal/db"
@@ -32,7 +33,10 @@ func (f *fetcherImp) Fetch() ([]*db.Order, []*db.Price, error) {
 		return nil, nil, err
 	}
 
-	orders := f.binanceOrdersToDBOrders(binanceOrders, prices)
+	orders, err := f.binanceOrdersToDBOrders(binanceOrders, prices)
+	if err != nil {
+		return nil, nil, err
+	}
 	if err = f.db.SetOrders(orders); err != nil {
 		log.Println("failed to set binanceOrders from binance to db: ", err)
 		return nil, nil, err
@@ -44,14 +48,22 @@ func (f *fetcherImp) Fetch() ([]*db.Order, []*db.Price, error) {
 	return orders, prices, nil
 }
 
-func (f *fetcherImp) binanceOrdersToDBOrders(binOrders []*binance.BinanceOrder, prices []*db.Price) []*db.Order {
+func (f *fetcherImp) binanceOrdersToDBOrders(binOrders []*binance.BinanceOrder, prices []*db.Price) ([]*db.Order, error) {
 	var orders []*db.Order
 	for _, binOrder := range binOrders {
 		var marketPrice, spread int
 		for _, price := range prices {
 			if price.Symbol == binOrder.Symbol {
-				marketPrice = price.Price
-				spread = binOrder.Price - marketPrice
+				parsedMarkedPrice, err := strconv.Atoi(price.Price)
+				if err != nil {
+					return nil, err
+				}
+				parsedOrderPrice, err := strconv.Atoi(binOrder.Price)
+				if err != nil {
+					return nil, err
+				}
+				marketPrice = parsedMarkedPrice
+				spread = parsedOrderPrice - marketPrice
 				break
 			}
 		}
@@ -79,5 +91,5 @@ func (f *fetcherImp) binanceOrdersToDBOrders(binOrders []*binance.BinanceOrder, 
 		}
 		orders = append(orders, order)
 	}
-	return orders
+	return orders, nil
 }

@@ -30,18 +30,18 @@ type Order struct {
 	OrderId                int    `json:"orderId"`
 	OrderListId            int    `json:"orderListId"`
 	ClientOrderId          string `json:"clientOrderId"`
-	Price                  int    `json:"price"`
-	OrigQty                int    `json:"origQty"`
-	ExecutedQty            int    `json:"executedQty"`
-	CummulativeQuoteQty    int    `json:"cummulativeQuoteQty"`
+	Price                  string `json:"price"`
+	OrigQty                string `json:"origQty"`
+	ExecutedQty            string `json:"executedQty"`
+	CummulativeQuoteQty    string `json:"cummulativeQuoteQty"`
 	Status                 string `json:"status"`
 	TimeInForce            string `json:"timeInForce"`
 	Type                   string `json:"type"`
 	Side                   string `json:"side"`
-	StopPrice              int    `json:"stopPrice"`
-	IcebergQty             int    `json:"icebergQty"`
-	Time                   string `json:"time"`
-	UpdateTime             string `json:"updateTime"`
+	StopPrice              string `json:"stopPrice"`
+	IcebergQty             string `json:"icebergQty"`
+	Time                   int    `json:"time"`
+	UpdateTime             int    `json:"updateTime"`
 	IsWorking              bool   `json:"isWorking"`
 	MarketPrice            int    `json:"marketPrice"`
 	OrderMarketPriceSpread int    `json:"orderMarketPriceSpread"`
@@ -49,7 +49,7 @@ type Order struct {
 
 type Price struct {
 	Symbol string `json:"symbol"`
-	Price  int    `json:"price"`
+	Price  string `json:"price"`
 }
 
 type Alert struct {
@@ -68,7 +68,7 @@ func NewClient() (Client, error) {
 	}
 
 	if err := os.Remove("sqlite-database.db"); err != nil {
-		return nil, err
+		log.Println("sqlite-database.db is not exists")
 	}
 	log.Println("creating sqlite-database.db...")
 	file, err := os.Create("sqlite-database.db") // Create SQLite file
@@ -95,7 +95,7 @@ func (c *client) SetOrders(orders []*Order) error {
 	for _, o := range orders {
 		insertSQL += fmt.Sprintf(`
 			INSERT INTO orders ('symbol', 'orderId', 'orderListId', 'clientOrderId', 'price', 'origQty', 'executedQty', 'cummulativeQuoteQty', 'status', 'timeInForce', 'type', 'side', 'stopPrice', 'icebergQty', 'time', 'updateTime', 'isWorking', 'marketPrice', 'orderMarketPriceSpread')
-			VALUES('%s', '%d', '%d', '%s', '%d', '%d', '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%t', '%d', '%d');
+			VALUES('%s', '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%t', '%d', '%d');
 		`, o.Symbol, o.OrderId, o.OrderListId, o.ClientOrderId, o.Price, o.OrigQty, o.ExecutedQty, o.CummulativeQuoteQty, o.Status, o.TimeInForce, o.Type, o.Side, o.StopPrice, o.IcebergQty, o.Time, o.UpdateTime, o.IsWorking, o.MarketPrice, o.OrderMarketPriceSpread)
 	}
 	insertSQL += `COMMIT;`
@@ -135,7 +135,7 @@ func (c *client) SetPrices(orders []*Price) error {
 	for _, o := range orders {
 		insertSQL += fmt.Sprintf(`
 			INSERT INTO prices ('symbol', 'price')
-			VALUES('%s', '%d');
+			VALUES('%s', '%s');
 		`, o.Symbol, o.Price)
 	}
 	insertSQL += `COMMIT;`
@@ -183,6 +183,21 @@ func (c *client) AddAlert(alert *Alert) error {
 	return err
 }
 
+func (c *client) DeleteAlert(alert *Alert) error {
+	log.Printf("deleting alert with id %s...", alert.ID)
+	deleteSQL := fmt.Sprintf(`
+		DELETE FROM alerts
+		WHERE id = '%s'
+	`, alert.ID)
+
+	statement, err := c.db.Prepare(deleteSQL)
+	if err != nil {
+		return err
+	}
+	_, err = statement.Exec()
+	return err
+}
+
 func (c *client) GetAlerts() ([]*Alert, error) {
 	log.Println("getting alert records from db...")
 	row, err := c.db.Query("SELECT * FROM alerts")
@@ -205,9 +220,25 @@ func (c *client) GetAlerts() ([]*Alert, error) {
 
 func (c *client) createTables() error {
 	ordersTableSQL := `CREATE TABLE orders (		
-		"code" TEXT,
-		"name" TEXT,
-		"program" TEXT		
+		"symbol" TEXT,
+		"orderId" INTEGER,
+		"orderListId" INTEGER,
+		"clientOrderId" TEXT,
+		"price" TEXT,
+		"origQty" TEXT,
+		"executedQty" TEXT,
+		"cummulativeQuoteQty" TEXT,
+		"status" TEXT,
+		"timeInForce" TEXT,
+		"type" TEXT,
+		"side" TEXT,
+		"stopPrice" TEXT,
+		"icebergQty" TEXT,
+		"time" INTEGER,
+		"updateTime" INTEGER,
+		"isWorking" BOOLEAN,
+		"marketPrice" INTEGER,
+		"orderMarketPriceSpread" INTEGER
 	  );`
 
 	log.Println("create orders table...")
@@ -221,8 +252,8 @@ func (c *client) createTables() error {
 	log.Println("orders table created")
 
 	pricesTableSQL := `CREATE TABLE prices (		
-		"price" INTEGER,
-		"symbol" TEXT		
+		"symbol" TEXT,
+		"price" TEXT	
 	  );`
 
 	log.Println("create prices table...")
@@ -234,5 +265,25 @@ func (c *client) createTables() error {
 		return err
 	}
 	log.Println("prices table created")
+
+	alertsTableSQL := `CREATE TABLE alerts (		
+		"id" TEXT,
+		"symbol" TEXT,
+		"price" INTEGER,
+		"name" TEXT,
+		"email" TEXT,
+		"text" TEXT,
+		"directionDown" BOOLEAN
+	  );`
+
+	log.Println("create alerts table...")
+	statement, err = c.db.Prepare(alertsTableSQL)
+	if err != nil {
+		return err
+	}
+	if _, err = statement.Exec(); err != nil {
+		return err
+	}
+	log.Println("alerts table created")
 	return nil
 }

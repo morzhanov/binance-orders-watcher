@@ -1,4 +1,4 @@
-package cmd
+package main
 
 import (
 	"log"
@@ -40,6 +40,7 @@ func main() {
 	cl := client.New(baseAuthUsername, baseAuthPassword, baseAuthSecret, appURI, dbClient, fetcherClient)
 
 	go func() {
+		log.Println("starting cron...")
 		if err = cronClient.Run(); err != nil {
 			log.Fatal(err)
 		}

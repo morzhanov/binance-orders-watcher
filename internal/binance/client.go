@@ -33,18 +33,18 @@ type BinanceOrder struct {
 	OrderId             int    `json:"orderId"`
 	OrderListId         int    `json:"orderListId"`
 	ClientOrderId       string `json:"clientOrderId"`
-	Price               int    `json:"price"`
-	OrigQty             int    `json:"origQty"`
-	ExecutedQty         int    `json:"executedQty"`
-	CummulativeQuoteQty int    `json:"cummulativeQuoteQty"`
+	Price               string `json:"price"`
+	OrigQty             string `json:"origQty"`
+	ExecutedQty         string `json:"executedQty"`
+	CummulativeQuoteQty string `json:"cummulativeQuoteQty"`
 	Status              string `json:"status"`
 	TimeInForce         string `json:"timeInForce"`
 	Type                string `json:"type"`
 	Side                string `json:"side"`
-	StopPrice           int    `json:"stopPrice"`
-	IcebergQty          int    `json:"icebergQty"`
-	Time                string `json:"time"`
-	UpdateTime          string `json:"updateTime"`
+	StopPrice           string `json:"stopPrice"`
+	IcebergQty          string `json:"icebergQty"`
+	Time                int    `json:"time"`
+	UpdateTime          int    `json:"updateTime"`
 	IsWorking           bool   `json:"isWorking"`
 }
 

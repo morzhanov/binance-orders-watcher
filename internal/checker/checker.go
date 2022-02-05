@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 
 	"github.com/morzhanov/binance-orders-watcher/internal/alertmanager"
 	"github.com/morzhanov/binance-orders-watcher/internal/db"
@@ -33,7 +34,10 @@ func (c *checkerImp) Check(prices []*db.Price) error {
 		var currentPrice int
 		for _, price := range prices {
 			if price.Symbol == alert.Symbol {
-				currentPrice = price.Price
+				currentPrice, err = strconv.Atoi(price.Price)
+				if err != nil {
+					return err
+				}
 				break
 			}
 		}
