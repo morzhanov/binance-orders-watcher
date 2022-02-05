@@ -1,5 +1,10 @@
 package binance
 
+import (
+	"fmt"
+	"net/http"
+)
+
 type Client interface {
 	GetOrders()
 	GetPrices()
@@ -11,16 +16,45 @@ type Client interface {
 type client struct {
 	apiKey    string
 	apiSecret string
+	prodURI   string
 }
 
-func New(apiKey, apiSecret string) Client {
-	return &client{apiKey: apiKey, apiSecret: apiSecret}
+func New(apiKey, apiSecret, prodURI string) Client {
+	return &client{apiKey: apiKey, apiSecret: apiSecret, prodURI: prodURI}
 }
 
 func (c *client) GetOrders() {
-	panic("implement me")
+	req, err := http.NewRequest(
+		http.MethodGet,
+		c.createURI("/api/v3/openOrders"),
+		nil,
+	)
+	// TODO: add api key and secret headers to secrets or get access token
+	//req.Header[]
+
+	res, err := http.DefaultClient.Do(req)
+	fmt.Printf("get orders req: res = %v, err = %v", res, err)
 }
 
-func (c *client) GetPrices() {
-	panic("implement me")
+func (c *client) GetPrices(tickers []string) {
+	for _, ticker := range tickers {
+		c.getPrice(ticker)
+	}
+}
+
+func (c *client) getPrice(ticker string) {
+	req, err := http.NewRequest(
+		http.MethodGet,
+		c.createURI("/api/v3/ticker/price?symbol="+ticker),
+		nil,
+	)
+	// TODO: add api key and secret headers to secrets or get access token
+	//req.Header[]
+
+	res, err := http.DefaultClient.Do(req)
+	fmt.Printf("get ticker %s req: res = %v, err = %v", ticker, res, err)
+}
+
+func (c *client) createURI(suffix string) string {
+	return c.prodURI + suffix
 }
