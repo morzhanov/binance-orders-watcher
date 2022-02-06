@@ -50,8 +50,8 @@ func (c *checkerImp) Check(prices []*db.Price) error {
 			return err
 		}
 		if alert.DirectionDown && parsedAlertPrice <= currentPrice || !alert.DirectionDown && parsedAlertPrice >= currentPrice {
-			log.Printf("sending alert for symbol %s: price %d near limit %d", alert.Symbol, alert.Price, currentPrice)
-			text := fmt.Sprintf("Binance Order ALERT! Order %s price %d near limit %d", alert.Symbol, alert.Price, currentPrice)
+			log.Printf("sending alert for symbol %s: price %s near limit %f", alert.Symbol, alert.Price, currentPrice)
+			text := fmt.Sprintf("Binance Order ALERT! Order %s price %s near limit %f", alert.Symbol, alert.Price, currentPrice)
 			if err = c.alertManager.SendAlert(alert.Email, alert.Name, text); err != nil {
 				return err
 			}

@@ -6,6 +6,8 @@ import (
 	"log"
 	"os"
 
+	"github.com/morzhanov/binance-orders-watcher/internal/debug"
+
 	_ "github.com/mattn/go-sqlite3" // Import go-sqlite3 library
 )
 
@@ -69,8 +71,10 @@ func NewClient() (Client, error) {
 		return instance, nil
 	}
 
-	if err := os.Remove("sqlite-database.db"); err != nil {
-		log.Println("sqlite-database.db is not exists")
+	if !debug.IsDebug() {
+		if err := os.Remove("sqlite-database.db"); err != nil {
+			log.Println("sqlite-database.db is not exists")
+		}
 	}
 	log.Println("creating sqlite-database.db...")
 	file, err := os.Create("sqlite-database.db") // Create SQLite file

@@ -25,11 +25,13 @@ const (
 )
 
 type Client interface {
-	Run(port string) error
+	Run() error
 }
 
 type client struct {
 	r            *mux.Router
+	appSchema    string
+	appPort      string
 	appUri       string
 	authUsername string
 	authPassword string
@@ -45,10 +47,12 @@ type JWTPayload struct {
 }
 
 type HomePageTemplateData struct {
-	AppURI string
-	Orders []*db.Order
-	Prices []*db.Price
-	Alerts []*db.Alert
+	AppURI    string
+	AppSchema string
+	AppPort   string
+	Orders    []*db.Order
+	Prices    []*db.Price
+	Alerts    []*db.Alert
 }
 
 func (payload *JWTPayload) Valid() error {
@@ -58,9 +62,11 @@ func (payload *JWTPayload) Valid() error {
 	return nil
 }
 
-func New(authUsername, authPassword, authSecret, appUri string, dbClient db.Client, fetcherClient fetcher.Fetcher) Client {
+func New(authUsername, authPassword, authSecret, appUri, appSchema, appPort string, dbClient db.Client, fetcherClient fetcher.Fetcher) Client {
 	c := &client{
 		appUri:       appUri,
+		appSchema:    appSchema,
+		appPort:      appPort,
 		authUsername: authUsername,
 		authPassword: authPassword,
 		authSecret:   authSecret,
@@ -78,9 +84,9 @@ func New(authUsername, authPassword, authSecret, appUri string, dbClient db.Clie
 	return c
 }
 
-func (c *client) Run(port string) error {
-	log.Printf("starting client application on %s:%s", c.appUri, port)
-	return http.ListenAndServe(":"+port, c.r)
+func (c *client) Run() error {
+	log.Printf("starting client application on %s:%s", c.appUri, c.appPort)
+	return http.ListenAndServe(":"+c.appPort, c.r)
 }
 
 func (c *client) homeHandler(w http.ResponseWriter, _ *http.Request) {
@@ -110,10 +116,12 @@ func (c *client) homeHandler(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	homePageData := &HomePageTemplateData{
-		AppURI: c.appUri,
-		Orders: orders,
-		Prices: prices,
-		Alerts: alerts,
+		AppURI:    c.appUri,
+		AppSchema: c.appSchema,
+		AppPort:   c.appPort,
+		Orders:    orders,
+		Prices:    prices,
+		Alerts:    alerts,
 	}
 	if err = tmpl.Execute(w, homePageData); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -140,8 +148,10 @@ func (c *client) addAlertHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var alert *db.Alert
-	if err = json.Unmarshal(body, alert); err != nil {
+	log.Println("unmarshalling alert object: ", string(body))
+	var alert db.Alert
+	if err = json.Unmarshal(body, &alert); err != nil {
+		log.Println("failed to unmarshal alert object: ", err)
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(err.Error()))
 		return
@@ -154,7 +164,7 @@ func (c *client) addAlertHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	alert.ID = alertID.String()
-	c.db.AddAlert(alert)
+	err = c.db.AddAlert(&alert)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))

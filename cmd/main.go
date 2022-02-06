@@ -10,12 +10,18 @@ import (
 	"github.com/morzhanov/binance-orders-watcher/internal/client"
 	"github.com/morzhanov/binance-orders-watcher/internal/cron"
 	"github.com/morzhanov/binance-orders-watcher/internal/db"
+	"github.com/morzhanov/binance-orders-watcher/internal/debug"
 	"github.com/morzhanov/binance-orders-watcher/internal/fetcher"
 )
 
 func main() {
+	if debug.IsDebug() {
+		log.Println("app started in debug mode: database will not be cleared and cron will not be run")
+	}
+
 	appPort := getEnvVar("APP_PORT")
 	appURI := getEnvVar("APP_URI")
+	appSchema := getEnvVar("APP_SCHEMA")
 	binApiKey := getEnvVar("BINANCE_API_KEY")
 	binApiSecret := getEnvVar("BINANCE_API_SECRET")
 	BinProdURI := getEnvVar("BINANCE_PRODUCTION_URI")
@@ -37,15 +43,18 @@ func main() {
 	checkerClient := checker.New(dbClient, alertManager)
 
 	cronClient := cron.New(fetcherClient, checkerClient)
-	cl := client.New(baseAuthUsername, baseAuthPassword, baseAuthSecret, appURI, dbClient, fetcherClient)
+	cl := client.New(baseAuthUsername, baseAuthPassword, baseAuthSecret, appURI, appSchema, appPort, dbClient, fetcherClient)
 
 	go func() {
+		if !debug.IsDebug() {
+			return
+		}
 		log.Println("starting cron...")
 		if err = cronClient.Run(); err != nil {
 			log.Fatal(err)
 		}
 	}()
-	if err = cl.Run(appPort); err != nil {
+	if err = cl.Run(); err != nil {
 		log.Fatal(err)
 	}
 }

@@ -2,20 +2,145 @@
 <html lang="en">
     <head>
         <title>Binance Orders Watcher</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
-            main {
+            html{
+                background-color: black;
+                font-family: Arial, serif;
+                color: rgb(234, 236, 239);
+            }
+
+            html, body, main {
+                height: 100%;
+            }
+
+            h1 {
+                color: rgb(240, 185, 11);
+            }
+
+            h3 {
+                margin: 8px;
+            }
+
+            tr {
+                height: 24px;
+                font-size: 14px;
+            }
+
+            table, th, td {
+                border: 1px solid black;
+            }
+
+            th {
+                color: rgb(240, 185, 11);
+                text-align: left;
+                font-weight: 600;
+                width: 300px;
+            }
+
+            td {
+                text-align: left;
+                font-weight: 400;
+                width: 300px;
+            }
+
+            button {
+                width: 150px;
+                height: 32px;
+                background-color: rgb(240, 185, 11);
+                text-transform: uppercase;
+                font-weight: 600;
+                color: rgb(70, 70, 70);
+                border: none;
+                border-radius: 4px;
+                outline: none;
+                margin-right: 24px;
+                cursor: pointer;
+            }
+
+            #more {
                 display: flex;
+                max-height: 60%;
+            }
+
+            .section {
+                padding: 16px;
+                border: 1px solid #aaa;
+                overflow-y: scroll;
+            }
+
+            .orders {
+                max-height: 30%;
+                margin-top: 24px;
+                margin-bottom: 32px;
+                padding: 16px;
+                border: 1px solid #aaa;
+            }
+
+            .alerts {
+                margin-right: 32px;
+            }
+
+            @media (max-width: 700px) {
+                tr {
+                    height: 16px;
+                    font-size: 12px;
+                }
+
+                .alerts {
+                    margin-bottom: 24px;
+                }
+
+                .prices {
+                    margin-right: 0;
+                }
+
+                #more {
+                    display: block;
+                    max-height: 0;
+                }
             }
 
             #modal {
                 display: none;
-                width: 400px;
-                height: 400px;
-                border-radius: 20px;
-                background-color: coral;
                 position: fixed;
-                top: calc(50% - 400px);
-                left: calc(50% - 400px);
+                background-color: rgba(33, 33, 33, 0.8);
+                width: 100%;
+                height: 100%;
+                top: 0;
+                left: 0;
+            }
+
+            #add-alert-form {
+                width: 400px;
+                height: 255px;
+                border-radius: 20px;
+                background-color: black;
+                padding: 20px;
+                position: relative;
+                top: calc(50% - 255px);
+                left: calc(50% - 255px);
+            }
+
+            .form-row {
+                margin-bottom: 16px;
+                display: flex;
+            }
+
+            .form-row label {
+                color: rgb(240, 185, 11);
+                display: block;
+                width: 200px;
+            }
+
+            .form-row input {
+                display: block;
+                width: 200px;
+                outline: none;
+            }
+
+            .form-row input[type="checkbox"] {
+                width: auto;
             }
         </style>
     </head>
@@ -25,7 +150,7 @@
         <button onclick="refreshData()">Refresh Data</button>
         <button onclick="openAlertModal()">Add Alert</button>
         <main>
-            <div>
+            <div class="orders section">
                 <h3>Orders</h3>
                 <table>
                     <tr>
@@ -46,96 +171,106 @@
                     {{ range .Orders}}
                     <tr>
                         <td>{{ .OrderID }}</td>
-                        <th>{{ .Symbol }}</th>
-                        <th>{{ .Type }}</th>
-                        <th>{{ .Side }}</th>
-                        <th>{{ .Status }}</th>
-                        <th>{{ .Price }}</th>
-                        <th>{{ .StopPrice }}</th>
-                        <th>{{ .OrigQty }}</th>
-                        <th>{{ .ExecutedQty }}</th>
-                        <th>{{ .MarketPrice }}</th>
-                        <th>{{ .LastOrderPrice }}</th>
-                        <th>{{ .PercentCompleted }} {{ if ne .PercentCompleted "N/A" }} %{{end}}</th>
-                        <th>{{ .OrderMarketPriceSpread }}</th>
-                    </tr>
-                    {{ end}}
-                </table>
-            </div>
-            <div>
-                <h3>Market Prices</h3>
-                <table>
-                    <tr>
-                        <th>Symbol</th>
-                        <th>Price</th>
-                    </tr>
-                    {{ range .Prices}}
-                    <tr>
                         <td>{{ .Symbol }}</td>
-                        <th>{{ .Price }}</th>
+                        <td>{{ .Type }}</td>
+                        <td>{{ .Side }}</td>
+                        <td>{{ .Status }}</td>
+                        <td>{{ .Price }}</td>
+                        <td>{{ .StopPrice }}</td>
+                        <td>{{ .OrigQty }}</td>
+                        <td>{{ .ExecutedQty }}</td>
+                        <td>{{ .MarketPrice }}</td>
+                        <td>{{ .LastOrderPrice }}</td>
+                        <td>{{ .PercentCompleted }} {{ if ne .PercentCompleted "N/A" }} %{{end}}</td>
+                        <td>{{ .OrderMarketPriceSpread }}</td>
                     </tr>
                     {{ end}}
                 </table>
             </div>
-            <div>
-                <h3>Alerts</h3>
-                <table>
-                    <tr>
-                        <th>ID</th>
-                        <th>Symbol</th>
-                        <th>Price</th>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Text</th>
-                        <th>DirectionDown</th>
-                    </tr>
-                    {{ range .Alerts}}
-                    <tr>
-                        <td>{{ .ID }}</td>
-                        <th>{{ .Symbol }}</th>
-                        <th>{{ .Price }}</th>
-                        <th>{{ .Name }}</th>
-                        <th>{{ .Email }}</th>
-                        <th>{{ .Text }}</th>
-                        <th>{{ .DirectionDown }}</th>
-                    </tr>
-                    {{ end}}
-                </table>
+            <div id="more">
+                <div class="section alerts">
+                    <h3>Alerts</h3>
+                    <table>
+                        <tr>
+                            <th>ID</th>
+                            <th>Symbol</th>
+                            <th>Price</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Text</th>
+                            <th>Direction Down</th>
+                        </tr>
+                        {{ range .Alerts}}
+                        <tr>
+                            <td>{{ .ID }}</td>
+                            <td>{{ .Symbol }}</td>
+                            <td>{{ .Price }}</td>
+                            <td>{{ .Name }}</td>
+                            <td>{{ .Email }}</td>
+                            <td>{{ .Text }}</td>
+                            <td>{{ .DirectionDown }}</td>
+                        </tr>
+                        {{ end}}
+                    </table>
+                </div>
+                <div class="prices section">
+                    <h3>Market Prices</h3>
+                    <table>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Price</th>
+                        </tr>
+                        {{ range .Prices}}
+                        <tr>
+                            <td>{{ .Symbol }}</td>
+                            <td>{{ .Price }}</td>
+                        </tr>
+                        {{ end}}
+                    </table>
+                </div>
             </div>
         </main>
     </body>
 
     <div id="modal">
-        <form id="add-alert-form" action="javascript:sendAlert()">
-            <label for="symbol">Symbol</label>
-            <input type="text" name="symbol" id="symbol"/>
-
-            <label for="price">Price</label>
-            <input type="number" name="price" id="price"/>
-
-            <label for="name">Name</label>
-            <input type="text" name="name" id="name"/>
-
-            <label for="email">Email</label>
-            <input type="text" name="email" id="email"/>
-
-            <label for="text">Text</label>
-            <input type="text" name="text" id="text"/>
-
-            <label for="directionDown">DirectionDown</label>
-            <input type="checkbox" name="directionDown" id="directionDown"/>
-
-            <button type="submit">Add</button>
-            <button type="reset" onclick="closeAlertModal()">Cancel</button>
+        <form id="add-alert-form">
+            <div class="form-row">
+                <label for="symbol">Symbol</label>
+                <input type="text" name="symbol" id="symbol"/>
+            </div>
+            <div class="form-row">
+                <label for="price">Price</label>
+                <input type="number" name="price" id="price"/>
+            </div>
+            <div class="form-row">
+                <label for="name">Name</label>
+                <input type="text" name="name" id="name"/>
+            </div>
+            <div class="form-row">
+                <label for="email">Email</label>
+                <input type="text" name="email" id="email"/>
+            </div>
+            <div class="form-row">
+                <label for="text">Text</label>
+                <input type="text" name="text" id="text"/>
+            </div>
+            <div class="form-row">
+                <label for="directionDown">DirectionDown</label>
+                <input type="checkbox" name="directionDown" id="directionDown"/>
+            </div>
+            <div class="form-row">
+                <button type="submit">Add</button>
+                <button type="reset" onclick="closeAlertModal()">Cancel</button>
+            </div>
         </form>
     </div>
 </html>
 
 <script>
     function refreshData() {
-        fetch("{{ .AppURI }}/refresh")
+        fetch("{{ .AppSchema }}://{{ .AppURI }}:{{ .AppPort }}/refresh")
             .then(response => {
-                console.log(response.data)
+                console.log(response)
                 window.location.reload()
             })
             .catch(err => console.log(err))
@@ -153,17 +288,22 @@
         e.preventDefault();
         const data = new FormData(e.target);
         const values = Object.fromEntries(data.entries());
+        if (values.directionDown === undefined) {
+            values.directionDown = false
+        }
 
-        fetch('{{ .AppURI }}/alert', {
+        fetch('{{ .AppSchema }}://{{ .AppURI }}:{{ .AppPort }}/alert', {
             method: 'POST',
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
             },
-            body: values
+            body: JSON.stringify(values)
         })
-        .then(res => console.log(res.data))
+        .then(res => console.log(res))
         .catch(err => console.log(err))
         closeAlertModal()
     }
+
+    document.getElementById("add-alert-form").addEventListener("submit", sendAlert)
 </script>
