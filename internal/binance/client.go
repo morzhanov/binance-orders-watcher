@@ -19,6 +19,7 @@ const (
 
 type Client interface {
 	GetOrders() ([]*BinanceOrder, error)
+	GetAllOrdersForSymbol(symbol string) ([]*BinanceOrder, error)
 	GetPrices() ([]*db.Price, error)
 }
 
@@ -59,8 +60,43 @@ func (c *client) GetOrders() ([]*BinanceOrder, error) {
 
 	uri := fmt.Sprintf("%s/api/v3/openOrders?%s&signature=%s", c.prodURI, query, signature)
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
+	if err != nil {
+		return nil, err
+	}
 	req.Header[ApiKeyHeaderName] = []string{c.apiKey}
 	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	ordersBytes, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var orders []*BinanceOrder
+	if err = json.Unmarshal(ordersBytes, &orders); err != nil {
+		return nil, err
+	}
+	return orders, nil
+}
+
+func (c *client) GetAllOrdersForSymbol(symbol string) ([]*BinanceOrder, error) {
+	ts := time.Now()
+	query := fmt.Sprintf("timestamp=%d&recvWindow=10000&symbol=%s", ts.UnixMilli(), symbol)
+	signature := c.createSignature(query)
+
+	uri := fmt.Sprintf("%s/api/v3/allOrders?%s&signature=%s", c.prodURI, query, signature)
+	req, err := http.NewRequest(http.MethodGet, uri, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header[ApiKeyHeaderName] = []string{c.apiKey}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
 	defer res.Body.Close()
 
 	ordersBytes, err := io.ReadAll(res.Body)
@@ -76,9 +112,15 @@ func (c *client) GetOrders() ([]*BinanceOrder, error) {
 }
 
 func (c *client) GetPrices() ([]*db.Price, error) {
-	uri := fmt.Sprintf("%sapi/v3/ticker/price")
+	uri := fmt.Sprintf("%s/api/v3/ticker/price", c.prodURI)
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
+	if err != nil {
+		return nil, err
+	}
 	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
 	priceBytes, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err

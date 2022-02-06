@@ -6,12 +6,24 @@
             main {
                 display: flex;
             }
+
+            #modal {
+                display: none;
+                width: 400px;
+                height: 400px;
+                border-radius: 20px;
+                background-color: coral;
+                position: fixed;
+                top: calc(50% - 400px);
+                left: calc(50% - 400px);
+            }
         </style>
     </head>
 
     <body>
         <h1>Binance Orders Watcher</h1>
         <button onclick="refreshData()">Refresh Data</button>
+        <button onclick="openAlertModal()">Add Alert</button>
         <main>
             <div>
                 <h3>Orders</h3>
@@ -20,27 +32,32 @@
                         <th>Order ID</th>
                         <th>Order Symbol</th>
                         <th>Order Type</th>
+                        <th>Side</th>
                         <th>Order Status</th>
                         <th>Order Price</th>
                         <th>Order Stop Price</th>
                         <th>Order Original Qty</th>
                         <th>Order Executed Qty</th>
                         <th>Symbol Market Price</th>
+                        <th>Order Original Price</th>
+                        <th>Order Price Percent Completed</th>
                         <th>Order/Market Price Spread</th>
-                        <th>Actions</th>
                     </tr>
                     {{ range .Orders}}
                     <tr>
                         <td>{{ .OrderID }}</td>
+                        <th>{{ .Symbol }}</th>
                         <th>{{ .Type }}</th>
+                        <th>{{ .Side }}</th>
                         <th>{{ .Status }}</th>
                         <th>{{ .Price }}</th>
                         <th>{{ .StopPrice }}</th>
                         <th>{{ .OrigQty }}</th>
                         <th>{{ .ExecutedQty }}</th>
                         <th>{{ .MarketPrice }}</th>
+                        <th>{{ .LastOrderPrice }}</th>
+                        <th>{{ .PercentCompleted }} {{ if ne .PercentCompleted "N/A" }} %{{end}}</th>
                         <th>{{ .OrderMarketPriceSpread }}</th>
-                        <th><button onclick="openAlertModal()">Add Alert</button></th>
                     </tr>
                     {{ end}}
                 </table>
@@ -88,7 +105,7 @@
         </main>
     </body>
 
-    <div id="modal" hidden>
+    <div id="modal">
         <form id="add-alert-form" action="javascript:sendAlert()">
             <label for="symbol">Symbol</label>
             <input type="text" name="symbol" id="symbol"/>
@@ -108,8 +125,8 @@
             <label for="directionDown">DirectionDown</label>
             <input type="checkbox" name="directionDown" id="directionDown"/>
 
-            <button type="submit"></button>
-            <button onclick="closeAlertModal()"></button>
+            <button type="submit">Add</button>
+            <button type="reset" onclick="closeAlertModal()">Cancel</button>
         </form>
     </div>
 </html>
@@ -125,11 +142,11 @@
     }
 
     function openAlertModal() {
-        document.getElementById("modal").hidden = false
+        document.getElementById("modal").style.display = "flex"
     }
 
     function closeAlertModal() {
-        document.getElementById("modal").hidden = true
+        document.getElementById("modal").style.display = "none"
     }
 
     function sendAlert(e) {

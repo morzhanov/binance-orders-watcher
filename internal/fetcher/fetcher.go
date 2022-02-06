@@ -1,11 +1,17 @@
 package fetcher
 
 import (
+	"fmt"
 	"log"
 	"strconv"
 
 	"github.com/morzhanov/binance-orders-watcher/internal/binance"
 	"github.com/morzhanov/binance-orders-watcher/internal/db"
+)
+
+const (
+	orderStatusFilled = "FILLED"
+	notAvailableText  = "N/A"
 )
 
 type Fetcher interface {
@@ -49,30 +55,67 @@ func (f *fetcherImp) Fetch() ([]*db.Order, []*db.Price, error) {
 }
 
 func (f *fetcherImp) binanceOrdersToDBOrders(binOrders []*binance.BinanceOrder, prices []*db.Price) ([]*db.Order, error) {
+	allOrders := make(map[string][]*binance.BinanceOrder, 0)
 	var orders []*db.Order
+	var err error
+
 	for _, binOrder := range binOrders {
-		var marketPrice, spread int
+		var parsedMarketPrice, parsedOrderPrice float64
+		var marketPrice, spread string
 		for _, price := range prices {
 			if price.Symbol == binOrder.Symbol {
-				parsedMarkedPrice, err := strconv.Atoi(price.Price)
+				parsedMarketPrice, err = strconv.ParseFloat(price.Price, 64)
 				if err != nil {
 					return nil, err
 				}
-				parsedOrderPrice, err := strconv.Atoi(binOrder.Price)
+				parsedOrderPrice, err = strconv.ParseFloat(binOrder.Price, 64)
 				if err != nil {
 					return nil, err
 				}
-				marketPrice = parsedMarkedPrice
-				spread = parsedOrderPrice - marketPrice
+				marketPrice = price.Price
+				spreadVal := parsedOrderPrice - parsedMarketPrice
+				spread = fmt.Sprintf("%f", spreadVal)
 				break
 			}
 		}
 
+		allOrdersForSymbol, ok := allOrders[binOrder.Symbol]
+		if !ok {
+			res, err := f.binClient.GetAllOrdersForSymbol(binOrder.Symbol)
+			if err != nil {
+				return nil, err
+			}
+			allOrdersForSymbol = res
+		}
+		allOrders[binOrder.Symbol] = allOrdersForSymbol
+
+		var lastOrderPrice string
+		for _, order := range allOrdersForSymbol {
+			if order.Status == orderStatusFilled {
+				lastOrderPrice = order.Price
+				break
+			}
+		}
+		if lastOrderPrice == "" {
+			lastOrderPrice = notAvailableText
+		}
+
+		var percentCompleted string
+		if lastOrderPrice == notAvailableText {
+			percentCompleted = notAvailableText
+		} else {
+			originalPrice, err := strconv.ParseFloat(lastOrderPrice, 64)
+			if err != nil {
+				return nil, err
+			}
+			percentCompleted = calculateOrderPercentCompleted(originalPrice, parsedMarketPrice, parsedOrderPrice)
+		}
+
 		order := &db.Order{
 			Symbol:                 binOrder.Symbol,
-			OrderId:                binOrder.OrderId,
-			OrderListId:            binOrder.OrderListId,
-			ClientOrderId:          binOrder.ClientOrderId,
+			OrderID:                binOrder.OrderId,
+			OrderListID:            binOrder.OrderListId,
+			ClientOrderID:          binOrder.ClientOrderId,
 			Price:                  binOrder.Price,
 			OrigQty:                binOrder.OrigQty,
 			ExecutedQty:            binOrder.ExecutedQty,
@@ -86,10 +129,22 @@ func (f *fetcherImp) binanceOrdersToDBOrders(binOrders []*binance.BinanceOrder, 
 			Time:                   binOrder.Time,
 			UpdateTime:             binOrder.UpdateTime,
 			IsWorking:              binOrder.IsWorking,
+			LastOrderPrice:         lastOrderPrice,
 			MarketPrice:            marketPrice,
+			PercentCompleted:       percentCompleted,
 			OrderMarketPriceSpread: spread,
 		}
 		orders = append(orders, order)
 	}
 	return orders, nil
+}
+
+func calculateOrderPercentCompleted(original, market, price float64) string {
+	var res float64
+	if price > original {
+		res = ((market - original) * 100) / (price - original)
+	} else {
+		res = ((original - market) * 100) / (original - price)
+	}
+	return fmt.Sprintf("%d", int(res))
 }

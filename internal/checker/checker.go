@@ -31,10 +31,10 @@ func (c *checkerImp) Check(prices []*db.Price) error {
 	}
 
 	for _, alert := range alerts {
-		var currentPrice int
+		var currentPrice float64
 		for _, price := range prices {
 			if price.Symbol == alert.Symbol {
-				currentPrice, err = strconv.Atoi(price.Price)
+				currentPrice, err = strconv.ParseFloat(price.Price, 64)
 				if err != nil {
 					return err
 				}
@@ -45,7 +45,11 @@ func (c *checkerImp) Check(prices []*db.Price) error {
 			return errors.New(fmt.Sprintf("price for symbol %s is not found in prices array", alert.Symbol))
 		}
 
-		if alert.DirectionDown && alert.Price <= currentPrice || !alert.DirectionDown && alert.Price >= currentPrice {
+		parsedAlertPrice, err := strconv.ParseFloat(alert.Price, 64)
+		if err != nil {
+			return err
+		}
+		if alert.DirectionDown && parsedAlertPrice <= currentPrice || !alert.DirectionDown && parsedAlertPrice >= currentPrice {
 			log.Printf("sending alert for symbol %s: price %d near limit %d", alert.Symbol, alert.Price, currentPrice)
 			text := fmt.Sprintf("Binance Order ALERT! Order %s price %d near limit %d", alert.Symbol, alert.Price, currentPrice)
 			if err = c.alertManager.SendAlert(alert.Email, alert.Name, text); err != nil {
