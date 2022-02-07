@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -28,29 +27,27 @@ const (
 	AuthCookieName               = "access_token"
 	BearerTokenPrefix            = "Bearer "
 	TokenExpirationDurationInSec = 84600
-)
-
-var (
-	AuthReqAlertAdminName  = os.Getenv("MAILJET_SENDER_NAME")
-	AuthReqAlertAdminEmail = os.Getenv("MAILJET_SENDER_EMAIL")
+	AppSchemaHTTPS               = "https"
 )
 
 type Client interface {
-	Run() error
+	Run(tlsCertPath, tlsKeyPath string) error
 }
 
 type client struct {
-	r            *mux.Router
-	appSchema    string
-	appPort      string
-	appUri       string
-	authUsername string
-	authPassword string
-	authSecret   string
-	db           db.Client
-	fetcher      fetcher.Fetcher
-	checker      checker.Checker
-	alertManager alertmanager.Manager
+	r                      *mux.Router
+	appSchema              string
+	appPort                string
+	appUri                 string
+	authUsername           string
+	authPassword           string
+	authSecret             string
+	authReqAlertAdminName  string
+	authReqAlertAdminEmail string
+	db                     db.Client
+	fetcher                fetcher.Fetcher
+	checker                checker.Checker
+	alertManager           alertmanager.Manager
 }
 
 type JWTPayload struct {
@@ -75,18 +72,20 @@ func (payload *JWTPayload) Valid() error {
 	return nil
 }
 
-func New(authUsername, authPassword, authSecret, appUri, appSchema, appPort string, dbClient db.Client, fetcherClient fetcher.Fetcher, checker checker.Checker, alertManager alertmanager.Manager) Client {
+func New(authUsername, authPassword, authSecret, appUri, appSchema, appPort, authReqAlertAdminName, authReqAlertAdminEmail string, dbClient db.Client, fetcherClient fetcher.Fetcher, checker checker.Checker, alertManager alertmanager.Manager) Client {
 	c := &client{
-		appUri:       appUri,
-		appSchema:    appSchema,
-		appPort:      appPort,
-		authUsername: authUsername,
-		authPassword: authPassword,
-		authSecret:   authSecret,
-		db:           dbClient,
-		fetcher:      fetcherClient,
-		checker:      checker,
-		alertManager: alertManager,
+		appUri:                 appUri,
+		appSchema:              appSchema,
+		appPort:                appPort,
+		authUsername:           authUsername,
+		authPassword:           authPassword,
+		authSecret:             authSecret,
+		authReqAlertAdminName:  authReqAlertAdminName,
+		authReqAlertAdminEmail: authReqAlertAdminEmail,
+		db:                     dbClient,
+		fetcher:                fetcherClient,
+		checker:                checker,
+		alertManager:           alertManager,
 	}
 
 	r := mux.NewRouter()
@@ -99,12 +98,16 @@ func New(authUsername, authPassword, authSecret, appUri, appSchema, appPort stri
 	return c
 }
 
-func (c *client) Run() error {
-	log.Printf("starting client application on %s:%s", c.appUri, c.appPort)
-	return http.ListenAndServe(":"+c.appPort, c.r)
+func (c *client) Run(tlsCertPath, tlsKeyPath string) error {
+	log.Printf("starting client application on %s://%s:%s", c.appSchema, c.appUri, c.appPort)
+	addr := ":" + c.appPort
+	if c.appSchema == AppSchemaHTTPS && tlsCertPath != "" && tlsKeyPath != "" {
+		return http.ListenAndServeTLS(addr, tlsCertPath, tlsKeyPath, c.r)
+	}
+	return http.ListenAndServe(addr, c.r)
 }
 
-func (c *client) homeHandler(w http.ResponseWriter, r *http.Request) {
+func (c *client) homeHandler(w http.ResponseWriter, _ *http.Request) {
 	tmpl, err := template.ParseFiles("./internal/client/templates/home.html")
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -250,7 +253,7 @@ func (c *client) checkAuthAttempts(r *http.Request) bool {
 	if req.Attempts >= 3 {
 		if !req.AlertSent {
 			text := fmt.Sprintf("User with IP %s is blocket: auth req count threshold reached.", ip)
-			c.alertManager.SendAlert(AuthReqAlertAdminEmail, AuthReqAlertAdminName, text)
+			c.alertManager.SendAlert(c.authReqAlertAdminEmail, c.authReqAlertAdminName, text)
 			c.db.UpdateAuthRequest(ip, 3, true)
 		}
 		return false
