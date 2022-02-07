@@ -43,10 +43,11 @@ func main() {
 	checkerClient := checker.New(dbClient, alertManager)
 
 	cronClient := cron.New(fetcherClient, checkerClient)
-	cl := client.New(baseAuthUsername, baseAuthPassword, baseAuthSecret, appURI, appSchema, appPort, dbClient, fetcherClient)
+	cl := client.New(baseAuthUsername, baseAuthPassword, baseAuthSecret, appURI, appSchema, appPort, dbClient, fetcherClient, checkerClient, alertManager)
 
 	go func() {
-		if !debug.IsDebug() {
+		if debug.IsDebug() {
+			log.Println("debug mode, skipping cron start...")
 			return
 		}
 		log.Println("starting cron...")

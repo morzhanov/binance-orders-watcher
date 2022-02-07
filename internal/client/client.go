@@ -4,12 +4,18 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"html/template"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
+
+	"github.com/morzhanov/binance-orders-watcher/internal/alertmanager"
+
+	"github.com/morzhanov/binance-orders-watcher/internal/checker"
 
 	"github.com/form3tech-oss/jwt-go"
 	"github.com/google/uuid"
@@ -22,6 +28,11 @@ const (
 	AuthCookieName               = "access_token"
 	BearerTokenPrefix            = "Bearer "
 	TokenExpirationDurationInSec = 84600
+)
+
+var (
+	AuthReqAlertAdminName  = os.Getenv("MAILJET_SENDER_NAME")
+	AuthReqAlertAdminEmail = os.Getenv("MAILJET_SENDER_EMAIL")
 )
 
 type Client interface {
@@ -38,6 +49,8 @@ type client struct {
 	authSecret   string
 	db           db.Client
 	fetcher      fetcher.Fetcher
+	checker      checker.Checker
+	alertManager alertmanager.Manager
 }
 
 type JWTPayload struct {
@@ -62,7 +75,7 @@ func (payload *JWTPayload) Valid() error {
 	return nil
 }
 
-func New(authUsername, authPassword, authSecret, appUri, appSchema, appPort string, dbClient db.Client, fetcherClient fetcher.Fetcher) Client {
+func New(authUsername, authPassword, authSecret, appUri, appSchema, appPort string, dbClient db.Client, fetcherClient fetcher.Fetcher, checker checker.Checker, alertManager alertmanager.Manager) Client {
 	c := &client{
 		appUri:       appUri,
 		appSchema:    appSchema,
@@ -72,6 +85,8 @@ func New(authUsername, authPassword, authSecret, appUri, appSchema, appPort stri
 		authSecret:   authSecret,
 		db:           dbClient,
 		fetcher:      fetcherClient,
+		checker:      checker,
+		alertManager: alertManager,
 	}
 
 	r := mux.NewRouter()
@@ -89,7 +104,7 @@ func (c *client) Run() error {
 	return http.ListenAndServe(":"+c.appPort, c.r)
 }
 
-func (c *client) homeHandler(w http.ResponseWriter, _ *http.Request) {
+func (c *client) homeHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl, err := template.ParseFiles("./internal/client/templates/home.html")
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -130,7 +145,13 @@ func (c *client) homeHandler(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (c *client) refreshDataHandler(w http.ResponseWriter, _ *http.Request) {
-	if _, _, err := c.fetcher.Fetch(); err != nil {
+	_, prices, err := c.fetcher.Fetch()
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	if err = c.checker.Check(prices); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(err.Error()))
 		return
@@ -182,6 +203,13 @@ func (c *client) authMiddleware(h http.Handler) http.Handler {
 			h.ServeHTTP(w, r)
 			return
 		}
+
+		if !c.checkAuthAttempts(r) {
+			w.WriteHeader(403)
+			w.Write([]byte("Forbidden.\n"))
+			return
+		}
+
 		log.Println("access token is not found in cookies, starting base auth flow...")
 		token := c.basicAuth(w, r)
 		if token == "" {
@@ -190,6 +218,12 @@ func (c *client) authMiddleware(h http.Handler) http.Handler {
 			w.Write([]byte("Unauthorised.\n"))
 			return
 		}
+
+		if err := c.clearAuthAttempts(r); err != nil {
+			w.WriteHeader(401)
+			w.Write([]byte("Unauthorised.\n"))
+		}
+
 		authCookie := &http.Cookie{
 			Name:    AuthCookieName,
 			Value:   BearerTokenPrefix + token,
@@ -198,6 +232,39 @@ func (c *client) authMiddleware(h http.Handler) http.Handler {
 		http.SetCookie(w, authCookie)
 		h.ServeHTTP(w, r)
 	})
+}
+
+func (c *client) checkAuthAttempts(r *http.Request) bool {
+	ip := readUserIP(r)
+	req, err := c.db.GetAuthRequest(ip)
+	if err != nil {
+		return false
+	}
+
+	if req == nil {
+		if err = c.db.AddAuthRequest(ip); err != nil {
+			return false
+		}
+		return true
+	}
+	if req.Attempts >= 3 {
+		if !req.AlertSent {
+			text := fmt.Sprintf("User with IP %s is blocket: auth req count threshold reached.", ip)
+			c.alertManager.SendAlert(AuthReqAlertAdminEmail, AuthReqAlertAdminName, text)
+			c.db.UpdateAuthRequest(ip, 3, true)
+		}
+		return false
+	}
+
+	if err = c.db.UpdateAuthRequest(ip, req.Attempts+1, false); err != nil {
+		return false
+	}
+	return true
+}
+
+func (c *client) clearAuthAttempts(r *http.Request) error {
+	ip := readUserIP(r)
+	return c.db.UpdateAuthRequest(ip, 0, false)
 }
 
 func (c *client) checkAccessToken(_ http.ResponseWriter, r *http.Request) bool {
@@ -215,7 +282,7 @@ func (c *client) verifyToken(token string) bool {
 		if !ok {
 			return nil, errors.New("token is not valid")
 		}
-		return nil, nil
+		return []byte(c.authSecret), nil
 	}
 
 	jwtToken, err := jwt.ParseWithClaims(token, &JWTPayload{}, keyFunc)
@@ -256,4 +323,15 @@ func (c *client) createAccessToken() (string, error) {
 	}
 	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, payload)
 	return jwtToken.SignedString([]byte(c.authSecret))
+}
+
+func readUserIP(r *http.Request) string {
+	IPAddress := r.Header.Get("X-Real-Ip")
+	if IPAddress == "" {
+		IPAddress = r.Header.Get("X-Forwarded-For")
+	}
+	if IPAddress == "" {
+		IPAddress = r.RemoteAddr
+	}
+	return IPAddress
 }

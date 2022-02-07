@@ -302,7 +302,7 @@
         })
         .then(res => console.log(res))
         .catch(err => console.log(err))
-        closeAlertModal()
+        window.location.reload()
     }
 
     document.getElementById("add-alert-form").addEventListener("submit", sendAlert)

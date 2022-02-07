@@ -5,10 +5,15 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/morzhanov/binance-orders-watcher/internal/debug"
 
 	_ "github.com/mattn/go-sqlite3" // Import go-sqlite3 library
+)
+
+const (
+	dbFileName = "sqlite-database.db"
 )
 
 var instance Client
@@ -21,6 +26,9 @@ type Client interface {
 	AddAlert(alert *Alert) error
 	DeleteAlert(alert *Alert) error
 	GetAlerts() ([]*Alert, error)
+	AddAuthRequest(ip string) error
+	UpdateAuthRequest(ip string, attempts int, alertSent bool) error
+	GetAuthRequest(ip string) (*AuthRequest, error)
 }
 
 type client struct {
@@ -66,32 +74,135 @@ type Alert struct {
 	DirectionDown bool   `json:"directionDown"`
 }
 
+type AuthRequest struct {
+	IP        string `json:"ip"`
+	Attempts  int    `json:"attempts"`
+	AlertSent bool   `json:"alertSent"`
+}
+
 func NewClient() (Client, error) {
 	if instance != nil {
 		return instance, nil
 	}
 
-	if !debug.IsDebug() {
-		if err := os.Remove("sqlite-database.db"); err != nil {
-			log.Println("sqlite-database.db is not exists")
+	var sqlDB *sql.DB
+	if !debug.IsDebug() && !dbExists() {
+		if err := os.Remove(dbFileName); err != nil {
+			log.Println(dbFileName + " is not exists")
 		}
-	}
-	log.Println("creating sqlite-database.db...")
-	file, err := os.Create("sqlite-database.db") // Create SQLite file
-	if err != nil {
-		return nil, err
-	}
-	if err = file.Close(); err != nil {
-		return nil, err
-	}
-	log.Println("sqlite-database.db created")
-	sqlDB, _ := sql.Open("sqlite3", "./sqlite-database.db")
+		log.Println("creating " + dbFileName)
+		file, err := os.Create(dbFileName)
+		if err != nil {
+			return nil, err
+		}
+		if err = file.Close(); err != nil {
+			return nil, err
+		}
 
-	c := &client{db: sqlDB}
-	if err = c.createTables(); err != nil {
-		return nil, err
+		sqlDB, _ = sql.Open("sqlite3", "./"+dbFileName)
+		if err = createTables(sqlDB); err != nil {
+			return nil, err
+		}
+	} else {
+		sqlDB, _ = sql.Open("sqlite3", "./"+dbFileName)
 	}
-	return c, nil
+
+	return &client{db: sqlDB}, nil
+}
+
+func dbExists() bool {
+	if _, err := os.Stat("./" + dbFileName); err != nil {
+		return false
+	}
+	return true
+}
+
+func createTables(sqlDB *sql.DB) error {
+	ordersTableSQL := `CREATE TABLE orders (		
+		"symbol" TEXT,
+		"orderId" INTEGER,
+		"orderListId" INTEGER,
+		"clientOrderId" TEXT,
+		"price" TEXT,
+		"origQty" TEXT,
+		"executedQty" TEXT,
+		"cummulativeQuoteQty" TEXT,
+		"status" TEXT,
+		"timeInForce" TEXT,
+		"type" TEXT,
+		"side" TEXT,
+		"stopPrice" TEXT,
+		"icebergQty" TEXT,
+		"time" INTEGER,
+		"updateTime" INTEGER,
+		"isWorking" BOOLEAN,
+		"lastOrderPrice" TEXT,
+		"marketPrice" TEXT,
+		"percentCompleted" TEXT,
+		"orderMarketPriceSpread" TEXT
+	  );`
+
+	log.Println("create orders table...")
+	statement, err := sqlDB.Prepare(ordersTableSQL)
+	if err != nil {
+		return err
+	}
+	if _, err = statement.Exec(); err != nil {
+		return err
+	}
+	log.Println("orders table created")
+
+	pricesTableSQL := `CREATE TABLE prices (		
+		"symbol" TEXT,
+		"price" TEXT	
+	  );`
+
+	log.Println("create prices table...")
+	statement, err = sqlDB.Prepare(pricesTableSQL)
+	if err != nil {
+		return err
+	}
+	if _, err = statement.Exec(); err != nil {
+		return err
+	}
+	log.Println("prices table created")
+
+	alertsTableSQL := `CREATE TABLE alerts (		
+		"id" TEXT,
+		"symbol" TEXT,
+		"price" TEXT,
+		"name" TEXT,
+		"email" TEXT,
+		"text" TEXT,
+		"directionDown" BOOLEAN
+	  );`
+
+	log.Println("create alerts table...")
+	statement, err = sqlDB.Prepare(alertsTableSQL)
+	if err != nil {
+		return err
+	}
+	if _, err = statement.Exec(); err != nil {
+		return err
+	}
+	log.Println("alerts table created")
+
+	authRequestsTableSQL := `CREATE TABLE auth_requests (		
+		"ip" TEXT,
+		"attempts" INTEGER,
+		"alertSent" BOOLEAN
+	  );`
+
+	log.Println("create auth requests table...")
+	statement, err = sqlDB.Prepare(authRequestsTableSQL)
+	if err != nil {
+		return err
+	}
+	if _, err = statement.Exec(); err != nil {
+		return err
+	}
+	log.Println("auth requests table created")
+	return nil
 }
 
 func (c *client) SetOrders(orders []*Order) error {
@@ -256,74 +367,50 @@ func (c *client) GetAlerts() ([]*Alert, error) {
 	return alerts, nil
 }
 
-func (c *client) createTables() error {
-	ordersTableSQL := `CREATE TABLE orders (		
-		"symbol" TEXT,
-		"orderId" INTEGER,
-		"orderListId" INTEGER,
-		"clientOrderId" TEXT,
-		"price" TEXT,
-		"origQty" TEXT,
-		"executedQty" TEXT,
-		"cummulativeQuoteQty" TEXT,
-		"status" TEXT,
-		"timeInForce" TEXT,
-		"type" TEXT,
-		"side" TEXT,
-		"stopPrice" TEXT,
-		"icebergQty" TEXT,
-		"time" INTEGER,
-		"updateTime" INTEGER,
-		"isWorking" BOOLEAN,
-		"lastOrderPrice" TEXT,
-		"marketPrice" TEXT,
-		"percentCompleted" TEXT,
-		"orderMarketPriceSpread" TEXT
-	  );`
+func (c *client) AddAuthRequest(ip string) error {
+	log.Println("inserting auth request into db...")
+	insertSQL := fmt.Sprintf(`
+			INSERT INTO auth_requests ('ip' ,'attempts', 'alertSent')
+			VALUES('%s', '%d', '%t');
+	`, ip, 0, false)
 
-	log.Println("create orders table...")
-	statement, err := c.db.Prepare(ordersTableSQL)
+	statement, err := c.db.Prepare(insertSQL)
 	if err != nil {
 		return err
 	}
-	if _, err = statement.Exec(); err != nil {
-		return err
-	}
-	log.Println("orders table created")
+	_, err = statement.Exec()
+	return err
+}
 
-	pricesTableSQL := `CREATE TABLE prices (		
-		"symbol" TEXT,
-		"price" TEXT	
-	  );`
+func (c *client) UpdateAuthRequest(ip string, attempts int, alertSent bool) error {
+	updateSQL := fmt.Sprintf(`
+			UPDATE auth_requests
+			SET attempts = '%d', 'alertSent' = %t
+			WHERE ip = '%s';
+	`, attempts, alertSent, ip)
 
-	log.Println("create prices table...")
-	statement, err = c.db.Prepare(pricesTableSQL)
+	statement, err := c.db.Prepare(updateSQL)
 	if err != nil {
 		return err
 	}
-	if _, err = statement.Exec(); err != nil {
-		return err
-	}
-	log.Println("prices table created")
+	_, err = statement.Exec()
+	return err
+}
 
-	alertsTableSQL := `CREATE TABLE alerts (		
-		"id" TEXT,
-		"symbol" TEXT,
-		"price" TEXT,
-		"name" TEXT,
-		"email" TEXT,
-		"text" TEXT,
-		"directionDown" BOOLEAN
-	  );`
+func (c *client) GetAuthRequest(ip string) (*AuthRequest, error) {
+	getSQL := fmt.Sprintf(`
+		SELECT * FROM auth_requests
+		WHERE ip = '%s';`,
+		ip)
 
-	log.Println("create alerts table...")
-	statement, err = c.db.Prepare(alertsTableSQL)
+	row := c.db.QueryRow(getSQL)
+	req := &AuthRequest{}
+	err := row.Scan(&req.IP, &req.Attempts, &req.AlertSent)
 	if err != nil {
-		return err
+		if strings.Contains(err.Error(), "no rows") {
+			return nil, nil
+		}
+		return nil, err
 	}
-	if _, err = statement.Exec(); err != nil {
-		return err
-	}
-	log.Println("alerts table created")
-	return nil
+	return req, nil
 }
