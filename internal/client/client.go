@@ -215,6 +215,7 @@ func (c *client) authMiddleware(h http.Handler) http.Handler {
 
 		log.Println("access token is not found in cookies, starting base auth flow...")
 		token := c.basicAuth(w, r)
+		log.Println("performed basic auth, token = ", token)
 		if token == "" {
 			w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
 			w.WriteHeader(401)
@@ -227,6 +228,7 @@ func (c *client) authMiddleware(h http.Handler) http.Handler {
 			w.Write([]byte("Unauthorised.\n"))
 		}
 
+		log.Println("creating auth cookie")
 		authCookie := &http.Cookie{
 			Name:    AuthCookieName,
 			Value:   BearerTokenPrefix + token,
@@ -303,13 +305,17 @@ func (c *client) basicAuth(_ http.ResponseWriter, r *http.Request) string {
 	if !ok ||
 		subtle.ConstantTimeCompare([]byte(user), []byte(c.authUsername)) != 1 ||
 		subtle.ConstantTimeCompare([]byte(pass), []byte(c.authPassword)) != 1 {
+		log.Println("basic auth failed")
+		log.Printf("user = %s, pass = %s, c.AuthUser = %s, c.authPass = %s", user, pass, c.authUsername, c.authPassword)
 		return ""
 	}
 
 	token, err := c.createAccessToken()
 	if err != nil {
+		log.Println("basic auth failed, ", err)
 		return ""
 	}
+	log.Println("basic auth succeeded, token = ", token)
 	return token
 }
 

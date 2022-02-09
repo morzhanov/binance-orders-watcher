@@ -10,5 +10,5 @@ COPY --from=builder /app/app /go/apps/binance-watcher/app
 COPY ./tls /go/apps/binance-watcher/tls
 COPY ./internal/client/templates /go/apps/binance-watcher/internal/client/templates
 COPY ./.env /go/apps/binance-watcher/.env
-EXPOSE 80
+EXPOSE 443
 CMD ["/go/apps/binance-watcher/app"]
