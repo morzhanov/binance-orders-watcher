@@ -93,6 +93,7 @@ func New(authUsername, authPassword, authSecret, appUri, appSchema, appPort, aut
 	r.HandleFunc("/", c.homeHandler)
 	r.HandleFunc("/refresh", c.refreshDataHandler)
 	r.HandleFunc("/alert", c.addAlertHandler)
+	r.HandleFunc("/alert/{id}", c.deleteAlertHandler)
 	r.PathPrefix("/").Handler(http.FileServer(http.Dir("./internal/client/static/")))
 	c.r = r
 
@@ -201,6 +202,21 @@ func (c *client) addAlertHandler(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
+func (c *client) deleteAlertHandler(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	if id == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("wrong id provided"))
+		return
+	}
+	if err := c.db.DeleteAlert(id); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Alert successfully deleted"))
+}
+
 func (c *client) authMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if c.checkAccessToken(w, r) {
@@ -302,6 +318,9 @@ func (c *client) verifyToken(token string) bool {
 }
 
 func (c *client) basicAuth(_ http.ResponseWriter, r *http.Request) string {
+	ip := readUserIP(r)
+	c.alertManager.SendAlert(c.authReqAlertAdminEmail, c.authReqAlertAdminName, fmt.Sprintf("user with IP = %s tries to perform basic auth", ip))
+
 	user, pass, ok := r.BasicAuth()
 	if !ok ||
 		subtle.ConstantTimeCompare([]byte(user), []byte(c.authUsername)) != 1 ||

@@ -58,7 +58,7 @@ func (c *checkerImp) Check(prices []*db.Price) error {
 			if err = c.alertManager.SendAlert(alert.Email, alert.Name, text); err != nil {
 				return err
 			}
-			if err = c.db.DeleteAlert(alert); err != nil {
+			if err = c.db.DeleteAlert(alert.ID); err != nil {
 				return err
 			}
 		}

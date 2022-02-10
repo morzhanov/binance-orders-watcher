@@ -200,6 +200,7 @@
                             <th>Email</th>
                             <th>Text</th>
                             <th>Direction Down</th>
+                            <th>Action</th>
                         </tr>
                         {{ range .Alerts}}
                         <tr>
@@ -210,6 +211,7 @@
                             <td>{{ .Email }}</td>
                             <td>{{ .Text }}</td>
                             <td>{{ .DirectionDown }}</td>
+                            <td><button onclick="deleteAlert('{{ .ID }}')">Delete</button></td>
                         </tr>
                         {{ end}}
                     </table>
@@ -303,6 +305,13 @@
         })
         .then(res => console.log(res))
         .catch(err => console.log(err))
+        window.location.reload()
+    }
+
+    function deleteAlert(id) {
+        fetch('{{ .AppSchema }}://{{ .AppURI }}:{{ .AppPort }}/alert/'+id, {method: 'DELETE'})
+            .then(res => console.log(res))
+            .catch(err => console.log(err))
         window.location.reload()
     }
 

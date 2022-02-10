@@ -24,7 +24,7 @@ type Client interface {
 	SetPrices(prices []*Price) error
 	GetPrices() ([]*Price, error)
 	AddAlert(alert *Alert) error
-	DeleteAlert(alert *Alert) error
+	DeleteAlert(id string) error
 	GetAlerts() ([]*Alert, error)
 	AddAuthRequest(ip string) error
 	UpdateAuthRequest(ip string, attempts int, alertSent bool) error
@@ -332,12 +332,12 @@ func (c *client) AddAlert(alert *Alert) error {
 	return err
 }
 
-func (c *client) DeleteAlert(alert *Alert) error {
-	log.Printf("deleting alert with id %s...", alert.ID)
+func (c *client) DeleteAlert(id string) error {
+	log.Printf("deleting alert with id %s...", id)
 	deleteSQL := fmt.Sprintf(`
 		DELETE FROM alerts
 		WHERE id = '%s'
-	`, alert.ID)
+	`, id)
 
 	statement, err := c.db.Prepare(deleteSQL)
 	if err != nil {
