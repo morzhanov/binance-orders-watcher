@@ -240,6 +240,9 @@ func (c *client) authMiddleware(h http.Handler) http.Handler {
 			return
 		}
 
+		ip := readUserIP(r)
+		c.alertManager.SendAlert(c.authReqAlertAdminEmail, c.authReqAlertAdminName, fmt.Sprintf("user with IP = %s successfully logged into the system", ip))
+
 		if err := c.clearAuthAttempts(r); err != nil {
 			w.WriteHeader(401)
 			w.Write([]byte("Unauthorised.\n"))
