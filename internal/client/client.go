@@ -93,6 +93,7 @@ func New(authUsername, authPassword, authSecret, appUri, appSchema, appPort, aut
 	r.HandleFunc("/", c.homeHandler)
 	r.HandleFunc("/refresh", c.refreshDataHandler)
 	r.HandleFunc("/alert", c.addAlertHandler)
+	r.PathPrefix("/").Handler(http.FileServer(http.Dir("./internal/client/static/")))
 	c.r = r
 
 	return c
